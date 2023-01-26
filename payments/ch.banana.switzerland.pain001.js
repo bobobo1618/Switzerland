@@ -114,10 +114,12 @@ function onCurrentIndexChanged_methodId(index, value, params) {
     //create a new object
     var pain001CH = new Pain001Switzerland(Banana.document);
     var paymentObj = pain001CH.initPaymObject();
-    if (parseInt(index) == 1)
+    if (parseInt(index) === 2)
         paymentObj.methodId = pain001CH.ID_PAYMENT_SEPA_DESCRIPTION;
+    else if (parseInt(index) === 1)
+        paymentObj.methodId = pain001CH.ID_PAYMENT_TYPE_X_DESCRIPTION;
     else
-        paymentObj.methodId = pain001CH.ID_PAYMENT_QRCODE_DESCRIPTION;
+        paymentObj.methodId = pain001CH.ID_PAYMENT_TYPE_D_DESCRIPTION;
     var newParams = pain001CH.convertPaymData(paymentObj);
 
     //if something is already written ask before resetting data
@@ -236,27 +238,49 @@ function Pain001Switzerland(banDocument) {
 
     // supported payment formats
     this.ID_PAIN_FORMAT_001_001_03_CH_02 = "pain.001.001.03.ch.02";
+    this.ID_PAIN_FORMAT_001_001_03_CH_02_DESCRIPTION = "Swiss Payment Standard 2021 (pain.001.001.03.ch.02)";
     this.ID_PAIN_FORMAT_001_001_09_CH_03 = "pain.001.001.09.ch.03";
+    this.ID_PAIN_FORMAT_001_001_09_CH_03_DESCRIPTION = "Swiss Payment Standard 2022 (pain.001.001.09.ch.03)";
     this.ID_PAIN_FORMAT_001_001_03 = "pain.001.001.03";
-    this.painFormats = [];
-    this.painFormats.push({
+    this.ID_PAIN_FORMAT_001_001_03_DESCRIPTION = "ISO 20022 Schema (pain.001.001.03)";
+
+    var painSPS2022Obj = {
         "@appId": this.id,
-        "@description": "Swiss Payment Standard 2022 (pain.001.001.09.ch.03)",
+        "@description": this.ID_PAIN_FORMAT_001_001_09_CH_03_DESCRIPTION,
         "@format": this.ID_PAIN_FORMAT_001_001_09_CH_03,
         "@version": this.version
-    });
-    this.painFormats.push({
+    };
+
+    var painSPS2021Obj = {
         "@appId": this.id,
-        "@description": "Swiss Payment Standard 2021 (pain.001.001.03.ch.02)",
+        "@description": this.ID_PAIN_FORMAT_001_001_03_CH_02_DESCRIPTION,
         "@format": this.ID_PAIN_FORMAT_001_001_03_CH_02,
         "@version": this.version
-    });
-    this.painFormats.push({
+    };
+
+    var painIso20022Obj = {
         "@appId": this.id,
-        "@description": "ISO 20022 Schema (pain.001.001.03)",
+        "@description": this.ID_PAIN_FORMAT_001_001_03_DESCRIPTION,
         "@format": this.ID_PAIN_FORMAT_001_001_03,
         "@version": this.version
-    });
+    };
+
+    this.painFormats = [];
+    if (this.param.defaultPaymentVersion === this.ID_PAIN_FORMAT_001_001_03_CH_02_DESCRIPTION) {
+        this.painFormats.push(painSPS2021Obj);
+        this.painFormats.push(painSPS2022Obj);
+        this.painFormats.push(painIso20022Obj);
+    }
+    else if (this.param.defaultPaymentVersion === this.ID_PAIN_FORMAT_001_001_03_DESCRIPTION) {
+        this.painFormats.push(painIso20022Obj);
+        this.painFormats.push(painSPS2022Obj);
+        this.painFormats.push(painSPS2021Obj);
+    }
+    else {
+        this.painFormats.push(painSPS2022Obj);
+        this.painFormats.push(painSPS2021Obj);
+        this.painFormats.push(painIso20022Obj);
+    }
 
     this.SEPARATOR_CHAR = '\xa0';
     this.isTest = false;
@@ -308,6 +332,30 @@ Pain001Switzerland.prototype.convertParam = function (param) {
     }
     convertedParam.data.push(currentParam);
 
+    var pain001CH = new Pain001Switzerland();
+
+    currentParam = {};
+    currentParam.name = 'defaultPaymentVersion';
+    currentParam.title = 'Default payment version';
+    currentParam.type = 'combobox';
+    currentParam.value = param.defaultPaymentVersion ? param.defaultPaymentVersion : '';
+    currentParam.items = [pain001CH.ID_PAIN_FORMAT_001_001_09_CH_03_DESCRIPTION, pain001CH.ID_PAIN_FORMAT_001_001_03_CH_02_DESCRIPTION, pain001CH.ID_PAIN_FORMAT_001_001_03_DESCRIPTION];
+    currentParam.readValue = function () {
+        param.defaultPaymentVersion = this.value;
+    }
+    convertedParam.data.push(currentParam);
+
+    currentParam = {};
+    currentParam.name = 'defaultPaymentMethod';
+    currentParam.title = 'Default payment method';
+    currentParam.type = 'combobox';
+    currentParam.value = param.defaultPaymentMethod ? param.defaultPaymentMethod : '';
+    currentParam.items = [pain001CH.ID_PAYMENT_TYPE_D_DESCRIPTION, pain001CH.ID_PAYMENT_TYPE_X_DESCRIPTION, pain001CH.ID_PAYMENT_SEPA_DESCRIPTION];
+    currentParam.readValue = function () {
+        param.defaultPaymentMethod = this.value;
+    }
+    convertedParam.data.push(currentParam);
+
     return convertedParam;
 }
 
@@ -327,14 +375,18 @@ Pain001Switzerland.prototype.convertPaymData = function (paymentObj) {
     if (!paymentObj)
         return convertedParam;
 
+    //for compatibility with old versions
+    var methodId = paymentObj.methodId;
+    if (methodId === this.ID_PAYMENT_QRCODE)
+        methodId = this.ID_PAYMENT_TYPE_D_DESCRIPTION;
+
     var currentParam = {};
     currentParam.name = 'methodId';
     currentParam.title = 'Payment Method';
     currentParam.type = 'combobox';
-    currentParam.value = paymentObj.methodId ? paymentObj.methodId : '';
+    currentParam.value = methodId ? methodId : '';
     currentParam.defaultvalue = '';
-    currentParam.items = Array (this.ID_PAYMENT_QRCODE_DESCRIPTION, this.ID_PAYMENT_SEPA_DESCRIPTION);
-    // currentParam.items = Array(this.ID_PAYMENT_QRCODE_DESCRIPTION);
+    currentParam.items = Array (this.ID_PAYMENT_TYPE_D_DESCRIPTION, this.ID_PAYMENT_TYPE_X_DESCRIPTION, this.ID_PAYMENT_SEPA_DESCRIPTION);
     currentParam.readValue = function () {
         paymentObj.methodId = this.value;
     }
@@ -509,17 +561,6 @@ Pain001Switzerland.prototype.convertPaymData = function (paymentObj) {
     * ALL PAYMENTS
     *******************************************************************************************/
     currentParam = {};
-    currentParam.name = 'amount';
-    currentParam.title = "Amount";
-    currentParam.type = 'string';
-    currentParam.value = paymentObj.amount ? paymentObj.amount : '';
-    currentParam.defaultvalue = '';
-    currentParam.readValue = function () {
-        paymentObj.amount = this.value;
-    }
-    convertedParam.data.push(currentParam);
-
-    currentParam = {};
     currentParam.name = 'currency';
     currentParam.title = "Currency";
     currentParam.type = 'string';
@@ -530,14 +571,28 @@ Pain001Switzerland.prototype.convertPaymData = function (paymentObj) {
     }
     convertedParam.data.push(currentParam);
 
+    currentParam = {};
+    currentParam.name = 'amount';
+    currentParam.title = "Amount";
+    currentParam.type = 'string';
+    currentParam.value = paymentObj.amount ? paymentObj.amount : '';
+    currentParam.defaultvalue = '';
+    currentParam.readValue = function () {
+        paymentObj.amount = this.value;
+    }
+    convertedParam.data.push(currentParam);
+
     /*******************************************************************************************
-    * QR PAYMENT
+    * PAYMENT DATA
     *******************************************************************************************/
-    // paymentObj.methodId contains the description of the payment type
-    var methodId = this.ID_PAYMENT_QRCODE;
+    // paymentObj.methodId contains the description of the payment type, will be converted to code
+    methodId = this.ID_PAYMENT_TYPE_D;
     if (paymentObj.methodId.indexOf("SEPA") >= 0)
         methodId = this.ID_PAYMENT_SEPA;
-     if (methodId == this.ID_PAYMENT_QRCODE) {
+    else if (paymentObj.methodId.indexOf("CHF") < 0)
+        methodId = this.ID_PAYMENT_TYPE_X;
+
+    if (methodId === this.ID_PAYMENT_TYPE_D || methodId === this.ID_PAYMENT_TYPE_X) {
         /*var refTypes = [];
         refTypes.push("QRR");
         refTypes.push("SCOR");
@@ -611,7 +666,7 @@ Pain001Switzerland.prototype.convertPaymData = function (paymentObj) {
     /*******************************************************************************************
     * ULTIMATE DEBTOR
     *******************************************************************************************/
-    if (methodId == this.ID_PAYMENT_QRCODE) {
+    if (methodId === this.ID_PAYMENT_TYPE_D || methodId === this.ID_PAYMENT_TYPE_X) {
         currentParam = {};
         currentParam.name = 'ultimateDebtor';
         currentParam.title = 'Ultimate Debtor';
@@ -953,10 +1008,10 @@ Pain001Switzerland.prototype.createTransferFile = function (paymentObj) {
                     transfer.setCategoryPurpose(categoryPurpose);
                 }
 
-                if (methodId == this.ID_PAYMENT_QRCODE) {
+                if (methodId ===  this.ID_PAYMENT_QRCODE || methodId === this.ID_PAYMENT_TYPE_D || methodId === this.ID_PAYMENT_TYPE_X) {
                     transfer.setCreditorReferenceType(transactionInfoObj.referenceType);
                 }
-                else if (methodId == this.ID_PAYMENT_SEPA) {
+                else if (methodId === this.ID_PAYMENT_SEPA) {
                     transfer.setBic(transactionInfoObj.creditorBic);
                     transfer.setServiceLevelCode("SEPA");
                 }
@@ -1124,20 +1179,20 @@ Pain001Switzerland.prototype.getDocumentInfo = function () {
         var fileNumber = this.banDocument.info("Base", "FileTypeNumber");
         var fileVersion = this.banDocument.info("Base", "FileTypeVersion");
 
-        if (fileGroup == "100")
+        if (fileGroup === "100")
             documentInfo.isDoubleEntry = true;
-        else if (fileGroup == "110")
+        else if (fileGroup === "110")
             documentInfo.isIncomeExpenses = true;
-        else if (fileGroup == "130")
+        else if (fileGroup === "130")
             documentInfo.isCashBook = true;
 
-        if (fileNumber == "110") {
+        if (fileNumber === "110") {
             documentInfo.withVat = true;
         }
-        if (fileNumber == "120") {
+        if (fileNumber === "120") {
             documentInfo.multiCurrency = true;
         }
-        if (fileNumber == "130") {
+        if (fileNumber === "130") {
             documentInfo.multiCurrency = true;
             documentInfo.withVat = true;
         }
@@ -1222,13 +1277,13 @@ Pain001Switzerland.prototype.getLang = function () {
 Pain001Switzerland.prototype.getTexts = function (language) {
 
     var texts = {};
-    if (language == 'it') {
+    if (language === 'it') {
         texts.DescriptionIban = 'IBAN (pagamento nazionale o internazionale)';
-    } else if (language == 'de') {
+    } else if (language === 'de') {
         texts.DescriptionIban = 'IBAN payment (domestic or international)';
-    } else if (language == 'fr') {
+    } else if (language === 'fr') {
         texts.DescriptionIban = 'IBAN payment (domestic or international)';
-    } else if (language == 'nl') {
+    } else if (language === 'nl') {
         texts.DescriptionIban = 'IBAN payment (domestic or international)';
     } else {
         texts.DescriptionIban = 'IBAN payment (domestic or international)';
@@ -1241,8 +1296,15 @@ Pain001Switzerland.prototype.initPaymObject = function () {
     // if syncTransaction=true data is synchronized with transaction row
     var syncTransaction = true;
 
+    // get default version and method payment from settings param
+    var methodId = this.ID_PAYMENT_TYPE_D;
+    if (this.param.defaultPaymentMethod === this.ID_PAYMENT_SEPA_DESCRIPTION)
+        methodId = this.ID_PAYMENT_SEPA;
+    else if (this.param.defaultPaymentMethod === this.ID_PAYMENT_TYPE_X_DESCRIPTION)
+        methodId = this.ID_PAYMENT_TYPE_X;
+
     var paymentObj = {
-        "methodId": this.ID_PAYMENT_QRCODE,
+        "methodId": methodId,
         "creditorAccountId": "",
         "creditorName": "",
         "creditorStreet1": "",
@@ -1288,6 +1350,8 @@ Pain001Switzerland.prototype.initParam = function () {
     param.messageSenderName = "";
     param.fieldAdditionalInfo = "Notes";
     param.creditorGroups = "";
+    param.defaultPaymentVersion = "";
+    param.defaultPaymentMethod = "";
     return param;
 }
 
@@ -1311,7 +1375,7 @@ Pain001Switzerland.prototype.infoPaymObject = function (paymentObj, infoObj, row
     if (paymentObj.creditorIban)
         iban = cleanIBAN(paymentObj.creditorIban);
     if (!isValidIBAN(iban)) {
-        var msg = this.getErrorMessage(this.ID_ERR_IBAN_NOTVALID, lang);
+        msg = this.getErrorMessage(this.ID_ERR_IBAN_NOTVALID, lang);
         msg = msg.replace("%1", "creditorIban");
         msg = "<span style='color:red'>" + msg + "</span>";
         let infoMsg = {
@@ -1321,7 +1385,7 @@ Pain001Switzerland.prototype.infoPaymObject = function (paymentObj, infoObj, row
     }
 
     if (!paymentObj.creditorName) {
-        var msg = this.getErrorMessage(this.ID_ERR_ELEMENT_EMPTY, lang);
+        msg = this.getErrorMessage(this.ID_ERR_ELEMENT_EMPTY, lang);
         msg = msg.replace("%1", "Creditor Name");
         msg = "<span style='color:red'>" + msg + "</span>";
         let infoMsg = {
@@ -1341,7 +1405,7 @@ Pain001Switzerland.prototype.infoPaymObject = function (paymentObj, infoObj, row
     }*/
 
     if (!paymentObj.creditorCity) {
-        var msg = this.getErrorMessage(this.ID_ERR_ELEMENT_EMPTY, lang);
+        msg = this.getErrorMessage(this.ID_ERR_ELEMENT_EMPTY, lang);
         msg = msg.replace("%1", "Creditor City");
         msg = "<span style='color:red'>" + msg + "</span>";
         let infoMsg = {
@@ -1351,7 +1415,7 @@ Pain001Switzerland.prototype.infoPaymObject = function (paymentObj, infoObj, row
     }
 
     if (!paymentObj.amount) {
-        var msg = this.getErrorMessage(this.ID_ERR_ELEMENT_EMPTY, lang);
+        msg = this.getErrorMessage(this.ID_ERR_ELEMENT_EMPTY, lang);
         msg = msg.replace("%1", "Amount");
         msg = "<span style='color:red'>" + msg + "</span>";
         let infoMsg = {
@@ -1413,20 +1477,26 @@ Pain001Switzerland.prototype.openEditor = function (dialogTitle, editorData, pag
     for (var i = 0; i < editorData.data.length; i++) {
         let key = editorData.data[i].name;
         let value = editorData.data[i].value;
-        if (key == 'methodId' && value == this.ID_PAYMENT_QRCODE) {
+        if (key === 'methodId' && value === this.ID_PAYMENT_QRCODE) {
             editorData.data[i].value = this.ID_PAYMENT_QRCODE_DESCRIPTION;
         }
-        else if (key == 'methodId' && value == this.ID_PAYMENT_SEPA) {
+        else if (key === 'methodId' && value === this.ID_PAYMENT_TYPE_D) {
+            editorData.data[i].value = this.ID_PAYMENT_TYPE_D_DESCRIPTION;
+        }
+        else if (key === 'methodId' && value === this.ID_PAYMENT_TYPE_X) {
+            editorData.data[i].value = this.ID_PAYMENT_TYPE_X_DESCRIPTION;
+        }
+        else if (key === 'methodId' && value === this.ID_PAYMENT_SEPA) {
             editorData.data[i].value = this.ID_PAYMENT_SEPA_DESCRIPTION;
         }
-        else if (key == 'transactionDate' || key == 'dueDate') {
+        else if (key === 'transactionDate' || key === 'dueDate') {
             let formattedValue = value;
             if (formattedValue && formattedValue.length > 0) {
                 formattedValue = this.toLocalDate(value);
             }
             editorData.data[i].value = formattedValue;
         }
-        else if (key == 'amount') {
+        else if (key === 'amount') {
             editorData.data[i].value = this.toAmountLocalFormat(value);
         }
     }
@@ -1441,21 +1511,27 @@ Pain001Switzerland.prototype.openEditor = function (dialogTitle, editorData, pag
     editorData = editor.getParams();
     let paymentObj = this.initPaymObject();
     for (var i = 0; i < editorData.data.length; i++) {
-        let key = editorData.data[i].name;
-        let value = editorData.data[i].value;
-        if (key == 'creditorAccountId' && value.indexOf('\xa0') > 0) {
+        key = editorData.data[i].name;
+        value = editorData.data[i].value;
+        if (key === 'creditorAccountId' && value.indexOf('\xa0') > 0) {
             value = value.substr(0, value.indexOf('\xa0'));
         }
-        else if (key == 'methodId' && value == this.ID_PAYMENT_QRCODE_DESCRIPTION) {
+        else if (key === 'methodId' && value === this.ID_PAYMENT_QRCODE_DESCRIPTION) {
             value = this.ID_PAYMENT_QRCODE;
         }
-        else if (key == 'methodId' && value == this.ID_PAYMENT_SEPA_DESCRIPTION) {
+        else if (key === 'methodId' && value === this.ID_PAYMENT_TYPE_D_DESCRIPTION) {
+            value = this.ID_PAYMENT_TYPE_D;
+        }
+        else if (key === 'methodId' && value === this.ID_PAYMENT_TYPE_X_DESCRIPTION) {
+            value = this.ID_PAYMENT_TYPE_X;
+        }
+        else if (key === 'methodId' && value === this.ID_PAYMENT_SEPA_DESCRIPTION) {
             value = this.ID_PAYMENT_SEPA;
         }
-        else if (key == 'transactionDate' || key == 'dueDate') {
+        else if (key === 'transactionDate' || key === 'dueDate') {
             value = this.toISODate(value);
         }
-        else if (key == 'amount') {
+        else if (key === 'amount') {
             //remove spaces
             value = value.replace(/ /g, "");
             value = this.toAmountInternalFormat(value);
@@ -1556,17 +1632,17 @@ Pain001Switzerland.prototype.scanCode = function (code) {
     }
 
     if (swissQRCodeData.QRType === "SPC" && swissQRCodeData.Version === "0200") {
-        paymentObj.methodId = this.ID_PAYMENT_QRCODE;
+        paymentObj.methodId = this.ID_PAYMENT_TYPE_D;
         paymentObj.creditorIban = swissQRCodeData.Account;
         paymentObj.creditorName = swissQRCodeData.CRName;
-        if (swissQRCodeData.CRAddressTyp == 'S') {
+        if (swissQRCodeData.CRAddressTyp === 'S') {
             paymentObj.creditorStreet1 = swissQRCodeData.CRStreet1;
             paymentObj.creditorStreet2 = swissQRCodeData.CRStreet2;
             paymentObj.creditorPostalCode = swissQRCodeData.CRPostalCode;
             paymentObj.creditorCity = swissQRCodeData.CRCity;
             paymentObj.creditorCountry = swissQRCodeData.CRCountry;
         }
-        else if (swissQRCodeData.CRAddressTyp == 'K') {
+        else if (swissQRCodeData.CRAddressTyp === 'K') {
             paymentObj.creditorStreet1 = swissQRCodeData.CRStreet1;
             var address = swissQRCodeData.CRStreet2.split(" ");
             if (address.length > 1) {
@@ -1581,7 +1657,7 @@ Pain001Switzerland.prototype.scanCode = function (code) {
         paymentObj = this.setCreditorByName(paymentObj);
 
         paymentObj.ultimateDebtorName = swissQRCodeData.UDName;
-        if (swissQRCodeData.UDAddressTyp == 'S') {
+        if (swissQRCodeData.UDAddressTyp === 'S') {
             paymentObj.ultimateDebtorStreet1 = swissQRCodeData.UDStreet1;
             paymentObj.ultimateDebtorStreet2 = swissQRCodeData.UDStreet2;
             paymentObj.ultimateDebtorPostalCode = swissQRCodeData.UDPostalCode;
@@ -1590,7 +1666,7 @@ Pain001Switzerland.prototype.scanCode = function (code) {
         }
         else {
             paymentObj.ultimateDebtorStreet1 = swissQRCodeData.UDStreet1;
-            var address = swissQRCodeData.UDStreet2.split(" ");
+            address = swissQRCodeData.UDStreet2.split(" ");
             if (address.length > 1) {
                 paymentObj.ultimateDebtorPostalCode = address[0];
                 paymentObj.ultimateDebtorCity = address[1];
@@ -1780,7 +1856,7 @@ Pain001Switzerland.prototype.validatePaymData = function (params) {
     var methodId = '';
     var reference = '';
     for (var i = 0; i < params.data.length; i++) {
-        if (params.data[i].name == 'methodId') {
+        if (params.data[i].name === 'methodId') {
             methodId = params.data[i].value;
             if (params.data[i].value.length <= 0) {
                 params.data[i].errorId = this.ID_ERR_ELEMENT_REQUIRED;
@@ -1819,7 +1895,7 @@ Pain001Switzerland.prototype.validatePaymData = function (params) {
                 error = true;
             }
         }
-        if (methodId == this.ID_PAYMENT_QRCODE_DESCRIPTION) {
+        if (methodId === this.ID_PAYMENT_QRCODE_DESCRIPTION || methodId === this.ID_PAYMENT_TYPE_D_DESCRIPTION || methodId === this.ID_PAYMENT_TYPE_X_DESCRIPTION) {
             if (key === 'creditorName' && value.length <= 0) {
                 params.data[i].errorId = this.ID_ERR_ELEMENT_REQUIRED;
                 params.data[i].errorMsg = this.getErrorMessage(this.ID_ERR_ELEMENT_REQUIRED);
@@ -1858,7 +1934,7 @@ Pain001Switzerland.prototype.validatePaymData = function (params) {
                 error = true;
             }
         }
-        else if (methodId == this.ID_PAYMENT_SEPA) {
+        else if (methodId === this.ID_PAYMENT_SEPA) {
             if (key === 'creditorIban' && value.length <= 0) {
                 params.data[i].errorId = this.ID_ERR_ELEMENT_REQUIRED;
                 params.data[i].errorMsg = this.getErrorMessage(this.ID_ERR_ELEMENT_REQUIRED);
@@ -1901,7 +1977,7 @@ Pain001Switzerland.prototype.validateTransferFile = function (xml, painFormat) {
 
     if (!Banana.Xml.validate(Banana.Xml.parse(xml), schemaFileName)) {
         //Test.logger.addText("Validation result => Xml document is not valid against " + schemaFileName + Banana.Xml.errorString);
-        var msg = this.getErrorMessage(this.ID_ERR_MESSAGE_NOTVALID, lang);
+        msg = this.getErrorMessage(this.ID_ERR_MESSAGE_NOTVALID, lang);
         msg = msg.replace("%1", Banana.Xml.errorString);
         this.banDocument.addMessage(msg, this.ID_ERR_MESSAGE_NOTVALID);
         return msg;
@@ -1945,7 +2021,7 @@ Pain001Switzerland.prototype.verifyBananaVersion = function (suppressMsg) {
     }
 
     if (!supportedVersion) {
-        var msg = this.getErrorMessage(this.ID_ERR_VERSION_NOTSUPPORTED, this.getLang());
+        msg = this.getErrorMessage(this.ID_ERR_VERSION_NOTSUPPORTED, this.getLang());
         if (suppressMsg)
             Banana.console.warn(msg);
         else
@@ -1954,7 +2030,7 @@ Pain001Switzerland.prototype.verifyBananaVersion = function (suppressMsg) {
     }
 
     if (!Banana.application.license || Banana.application.license.licenseType !== "advanced") {
-        var msg = this.getErrorMessage(this.ID_ERR_LICENSE_NOTVALID, this.getLang());
+        msg = this.getErrorMessage(this.ID_ERR_LICENSE_NOTVALID, this.getLang());
         if (suppressMsg)
             Banana.console.warn(msg);
         else
@@ -1977,6 +2053,10 @@ Pain001Switzerland.prototype.verifyParam = function () {
         this.param.fieldAdditionalInfo = defaultParam.fieldAdditionalInfo;
     if (!this.param.creditorGroups)
         this.param.creditorGroups = defaultParam.creditorGroups;
+    if (!this.param.defaultPaymentVersion)
+        this.param.defaultPaymentVersion = defaultParam.defaultPaymentVersion;
+    if (!this.param.defaultPaymentMethod)
+        this.param.defaultPaymentMethod = defaultParam.defaultPaymentMethod;
     /*if (!this.param.syncTransactionLast)
         this.param.syncTransactionLast = false;*/
 }
@@ -1985,7 +2065,8 @@ Pain001Switzerland.prototype.verifyParam = function () {
 * verify and clean payment object data
 */
 Pain001Switzerland.prototype.verifyPaymObject = function (paymentObj) {
-    if (!paymentObj || !paymentObj.methodId || paymentObj.methodId !== this.ID_PAYMENT_QRCODE)
+    if (!paymentObj || !paymentObj.methodId || paymentObj.methodId !== this.ID_PAYMENT_QRCODE
+            || paymentObj.methodId !== this.ID_PAYMENT_TYPE_D|| paymentObj.methodId !== this.ID_PAYMENT_TYPE_X)
         return paymentObj;
 
     var iban = "";
@@ -2087,7 +2168,7 @@ var JsAction = class JsAction {
 
         // Create docChange
         var docChange = new DocumentChange();
-        if (tabPos.rowNr == -1)
+        if (parseInt(tabPos.rowNr) === -1)
             docChange.addOperationRowAdd(tabPos.tableName, changedRowFields);
         else
             docChange.addOperationRowModify(tabPos.tableName, tabPos.rowNr, changedRowFields);
@@ -2192,7 +2273,7 @@ var JsAction = class JsAction {
 
         // Create docChange
         var docChange = new DocumentChange();
-        if (tabPos.rowNr == -1)
+        if (parseInt(tabPos.rowNr) === -1)
             docChange.addOperationRowAdd(tabPos.tableName, changedRowFields);
         else
             docChange.addOperationRowModify(tabPos.tableName, tabPos.rowNr, changedRowFields);
@@ -2207,7 +2288,6 @@ var JsAction = class JsAction {
         if (!pain001CH.verifyBananaVersion())
             return "";
 
-        var pain001CH = new Pain001Switzerland(Banana.document);
         var exportedFileName = pain001CH.saveTransferFile(xml, fileName);
         if (exportedFileName)
             return exportedFileName;
@@ -2298,7 +2378,7 @@ var JsAction = class JsAction {
             let paymentObjCheck = pain001CH.initPaymObject();
             this._rowGetAmount(paymentObjCheck, row);
             let warning = "";
-            if (paymentObj.syncTransaction && paymentObjCheck.amount != obj['amount'])
+            if (paymentObj.syncTransaction && paymentObjCheck.amount !== obj['amount'])
                 warning = " <span style='color:red;'>(Transaction: " + paymentObjCheck.currency + " " + paymentObjCheck.amount + ")</span>";
             infoMsg = {
                 'text': obj['@type'] + " " + obj['@appId'] + " v." + obj['@version'],
@@ -2525,7 +2605,7 @@ var JsAction = class JsAction {
             this._rowSetDoc(paymentObj, changedRowFields);
 
             //Fix uuid if it is empty or different from row uuid
-            if (!paymentObj["@uuid"] || paymentObj["@uuid"] != row.uuid) {
+            if (!paymentObj["@uuid"] || paymentObj["@uuid"] !== row.uuid) {
                 Banana.console.debug("fixing uuid" + paymentObj["@uuid"] + " " + row.uuid);
                 paymentObj["@uuid"] = row.uuid;
                 changedRowFields["PaymentData"] = { "paymentdata_json": JSON.stringify(paymentObj) };
