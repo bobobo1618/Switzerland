@@ -378,7 +378,7 @@ Pain001Switzerland.prototype.convertPaymData = function (paymentObj) {
     //for compatibility with old versions
     var methodId = paymentObj.methodId;
     if (methodId === this.ID_PAYMENT_QRCODE)
-        methodId = this.ID_PAYMENT_TYPE_D_DESCRIPTION;
+        methodId = this.ID_PAYMENT_TYPE_D;
 
     var currentParam = {};
     currentParam.name = 'methodId';
